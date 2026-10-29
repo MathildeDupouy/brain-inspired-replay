@@ -1,6 +1,6 @@
 from torchvision import datasets, transforms
-from data.manipulate import UnNormalize
 
+from data.manipulate import UnNormalize
 
 # Specify available data-sets
 AVAILABLE_DATASETS = {
@@ -17,6 +17,9 @@ AVAILABLE_TRANSFORMS = {
         transforms.ToTensor(),
     ],
     'mnist28': [
+        transforms.ToTensor(),
+    ],
+    'organmnist': [
         transforms.ToTensor(),
     ],
     'cifar10': [
@@ -50,6 +53,7 @@ AVAILABLE_TRANSFORMS = {
 DATASET_CONFIGS = {
     'mnist': {'size': 32, 'channels': 1, 'classes': 10},
     'mnist28': {'size': 28, 'channels': 1, 'classes': 10},
+    'organmnist': {'size': 28, 'channels': 1, 'classes': 11},
     'cifar10': {'size': 32, 'channels': 3, 'classes': 10},
     'cifar100': {'size': 32, 'channels': 3, 'classes': 100},
 }

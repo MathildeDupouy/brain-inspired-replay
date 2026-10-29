@@ -1,9 +1,16 @@
 import copy
+
 import numpy as np
-from torchvision import transforms
 from torch.utils.data import ConcatDataset
+from torchvision import transforms
+
 from data.available import AVAILABLE_DATASETS, AVAILABLE_TRANSFORMS, DATASET_CONFIGS
-from data.manipulate import ReducedDataset, SubDataset, TransformedDataset, permutate_image_pixels
+from data.manipulate import (
+    ReducedDataset,
+    SubDataset,
+    TransformedDataset,
+    permutate_image_pixels,
+)
 
 try:
     import medmnist
@@ -193,7 +200,7 @@ def get_multitask_experiment(name, scenario, tasks, data_dir="./store/datasets",
         if tasks != 3:
             raise ValueError("Experiment 'OrganMNIST' requires exactly 3 tasks: OrganAMNIST, OrganCMNIST and OrganSMNIST.")
         # configurations
-        config = copy.deepcopy(DATASET_CONFIGS['mnist28'])
+        config = copy.deepcopy(DATASET_CONFIGS[name.lower()])
         classes_per_task = len(MEDMNIST_INFO['organamnist']['label']) if MEDMNIST_INFO is not None else 11
         if not only_config:
             if medmnist is None or MEDMNIST_INFO is None:
@@ -203,7 +210,7 @@ def get_multitask_experiment(name, scenario, tasks, data_dir="./store/datasets",
                 )
 
             data_flags = ['organamnist', 'organcmnist', 'organsmnist']
-            dataset_transform = transforms.Compose([*AVAILABLE_TRANSFORMS['mnist28']])
+            dataset_transform = transforms.Compose([*AVAILABLE_TRANSFORMS[name.lower()]])
 
             train_datasets = []
             test_datasets = []
