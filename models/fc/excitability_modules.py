@@ -1,4 +1,5 @@
 import math
+
 import torch
 from torch import nn
 from torch.nn.parameter import Parameter
@@ -9,11 +10,11 @@ def linearExcitability(input, weight, excitability=None, bias=None):
     Applies a linear transformation to the incoming data: :math:`y = c(xA^T) + b`.
 
     Shape:
-        - input:        :math:`(N, *, in\_features)`
-        - weight:       :math:`(out\_features, in\_features)`
-        - excitability: :math:`(out\_features)`
-        - bias:         :math:`(out\_features)`
-        - output:       :math:`(N, *, out\_features)`
+        - input:        :math:`(N, *, in_features)`
+        - weight:       :math:`(out_features, in_features)`
+        - excitability: :math:`(out_features)`
+        - bias:         :math:`(out_features)`
+        - output:       :math:`(N, *, out_features)`
     (NOTE: `*` means any number of additional dimensions)
     """
     if excitability is not None:
@@ -35,8 +36,8 @@ class LinearExcitability(nn.Module):
         excitability:   if 'False', layer will not learn a multiplicative excitability-parameter (DEFAULT=True)
 
     Shape:
-        - input:    :math:`(N, *, in\_features)` where `*` means any number of additional dimensions
-        - output:   :math:`(N, *, out\_features)` where all but the last dimension are the same shape as the input.
+        - input:    :math:`(N, *, in_features)` where `*` means any number of additional dimensions
+        - output:   :math:`(N, *, out_features)` where all but the last dimension are the same shape as the input.
 
     Attributes:
         weight:         the learnable weights of the module of shape (out_features x in_features)

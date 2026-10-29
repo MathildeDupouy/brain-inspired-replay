@@ -1,6 +1,6 @@
 import argparse
-from utils import checkattr
 
+from utils import checkattr
 
 ##-------------------------------------------------------------------------------------------------------------------##
 
@@ -80,7 +80,7 @@ def add_task_options(parser, only_MNIST=False, single_task=False, compare_code="
         task_default = 'CIFAR10'
     else:
         MNIST_tasks = ['splitMNIST', 'permMNIST']
-        image_tasks = ['CIFAR100']
+        image_tasks = ['CIFAR100', 'OrganMNIST']
         task_choices = MNIST_tasks if only_MNIST else MNIST_tasks+image_tasks
         task_default = 'splitMNIST' if only_MNIST else 'CIFAR100'
     task_params.add_argument('--experiment', type=str, default=task_default, choices=task_choices)
@@ -292,13 +292,45 @@ def set_defaults(args, only_MNIST=False, single_task=False, generative=True, com
     if hasattr(args, "dg_type"):
         args.dg_type = ("task" if args.experiment=='permMNIST' else "class") if args.dg_type is None else args.dg_type
     if not single_task:
-        args.tasks= (
-            5 if args.experiment=='splitMNIST' else (10 if args.experiment=="CIFAR100" else 100)
-        ) if args.tasks is None else args.tasks
-        args.iters = (5000 if args.experiment=='CIFAR100' else 2000) if args.iters is None else args.iters
-        args.lr = (0.001 if args.experiment=='splitMNIST' else 0.0001) if args.lr is None else args.lr
-        args.batch = (128 if args.experiment=='splitMNIST' else 256) if args.batch is None else args.batch
-        args.fc_units = (400 if args.experiment=='splitMNIST' else 2000) if args.fc_units is None else args.fc_units
+        default_tasks = {
+            'splitMNIST': 5,
+            'CIFAR100': 10,
+            'OrganMNIST': 3,
+            'permMNIST': 100,
+        }
+        args.tasks = default_tasks.get(args.experiment, 100) if args.tasks is None else args.tasks
+
+        default_iters = {
+            'CIFAR100': 5000,
+            'splitMNIST': 2000,
+            'OrganMNIST': 2000,
+            'permMNIST': 2000,
+        }
+        args.iters = default_iters.get(args.experiment, 2000) if args.iters is None else args.iters
+
+        default_lr = {
+            'splitMNIST': 0.001,
+            'OrganMNIST': 0.001,
+            'CIFAR100': 0.0001,
+            'permMNIST': 0.0001,
+        }
+        args.lr = default_lr.get(args.experiment, 0.0001) if args.lr is None else args.lr
+
+        default_batch = {
+            'splitMNIST': 128,
+            'OrganMNIST': 128,
+            'CIFAR100': 256,
+            'permMNIST': 256,
+        }
+        args.batch = default_batch.get(args.experiment, 256) if args.batch is None else args.batch
+
+        default_fc_units = {
+            'splitMNIST': 400,
+            'OrganMNIST': 400,
+            'CIFAR100': 2000,
+            'permMNIST': 2000,
+        }
+        args.fc_units = default_fc_units.get(args.experiment, 2000) if args.fc_units is None else args.fc_units
     # -set hyper-parameter values (typically found by grid-search) based on chosen experiment & scenario
     if not single_task and not compare_code in ('hyper', 'bir'):
         if args.experiment=='splitMNIST':
@@ -329,6 +361,15 @@ def set_defaults(args, only_MNIST=False, single_task=False, generative=True, com
             if compare_code=="all":
                 args.dg_si_prop = 0.8 if args.dg_si_prop is None else args.dg_si_prop
                 args.dg_c = 1. if args.dg_c is None else args.dg_c
+        elif args.experiment=='OrganMNIST':
+            args.xdg_prop = 0. if args.scenario=="task" and args.xdg_prop is None else args.xdg_prop
+            args.si_c = (10. if args.scenario=='task' else 0.1) if args.si_c is None else args.si_c
+            args.ewc_lambda = (
+                1000000000. if args.scenario=='task' else 100000.
+            ) if args.ewc_lambda is None else args.ewc_lambda
+            args.gamma = 1. if args.gamma is None else args.gamma
+            if hasattr(args, 'dg_prop'):
+                args.dg_prop = 0.8 if args.dg_prop is None else args.dg_prop
     # -for other unselected options, set default values (not specific to chosen scenario / experiment)
     args.h_dim = args.fc_units if args.h_dim is None else args.h_dim
     if hasattr(args, "lr_gen"):

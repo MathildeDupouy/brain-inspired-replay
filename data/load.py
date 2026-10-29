@@ -5,6 +5,13 @@ from torch.utils.data import ConcatDataset
 from data.available import AVAILABLE_DATASETS, AVAILABLE_TRANSFORMS, DATASET_CONFIGS
 from data.manipulate import ReducedDataset, SubDataset, TransformedDataset, permutate_image_pixels
 
+try:
+    import medmnist
+    from medmnist import INFO as MEDMNIST_INFO
+except ImportError:
+    medmnist = None
+    MEDMNIST_INFO = None
+
 def get_dataset(name, type='train', download=True, capacity=None, permutation=None, dir='./store/datasets',
                 verbose=False, augment=False, normalize=False, target_transform=None, valid_prop=0.):
     '''Create [train|valid|test]-dataset.'''
@@ -179,6 +186,42 @@ def get_multitask_experiment(name, scenario, tasks, data_dir="./store/datasets",
                 if not only_test:
                     train_datasets.append(SubDataset(cifar100_train, labels, target_transform=target_transform))
                 test_datasets.append(SubDataset(cifar100_test, labels, target_transform=target_transform))
+    elif name == 'OrganMNIST':
+        # OrganMNIST is defined as a domain-incremental benchmark with 3 tasks.
+        if scenario != 'domain':
+            raise ValueError("Experiment 'OrganMNIST' only supports scenario='domain'.")
+        if tasks != 3:
+            raise ValueError("Experiment 'OrganMNIST' requires exactly 3 tasks: OrganAMNIST, OrganCMNIST and OrganSMNIST.")
+        # configurations
+        config = copy.deepcopy(DATASET_CONFIGS['mnist28'])
+        classes_per_task = len(MEDMNIST_INFO['organamnist']['label']) if MEDMNIST_INFO is not None else 11
+        if not only_config:
+            if medmnist is None or MEDMNIST_INFO is None:
+                raise ImportError(
+                    "Using OrganMNIST requires 'medmnist' to be installed. "
+                    "Please install it (e.g., 'pip install medmnist')."
+                )
+
+            data_flags = ['organamnist', 'organcmnist', 'organsmnist']
+            dataset_transform = transforms.Compose([*AVAILABLE_TRANSFORMS['mnist28']])
+
+            train_datasets = []
+            test_datasets = []
+            for data_flag in data_flags:
+                info = MEDMNIST_INFO[data_flag]
+                dataset_class = getattr(medmnist, info['python_class'])
+                if not only_test:
+                    train_datasets.append(dataset_class(
+                        split='train', transform=dataset_transform, download=True, root=data_dir
+                    ))
+                test_datasets.append(dataset_class(
+                    split='test', transform=dataset_transform, download=True, root=data_dir
+                ))
+
+                if verbose:
+                    if not only_test:
+                        print(" --> {}: 'train'-dataset consisting of {} samples".format(data_flag, len(train_datasets[-1])))
+                    print(" --> {}: 'test'-dataset consisting of {} samples".format(data_flag, len(test_datasets[-1])))
     else:
         raise RuntimeError('Given undefined experiment: {}'.format(name))
 
