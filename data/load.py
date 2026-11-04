@@ -5,6 +5,7 @@ from torch.utils.data import ConcatDataset
 from torchvision import transforms
 
 from data.available import AVAILABLE_DATASETS, AVAILABLE_TRANSFORMS, DATASET_CONFIGS
+from data.HITS import HITSDataset
 from data.manipulate import (
     ReducedDataset,
     SubDataset,
@@ -229,6 +230,46 @@ def get_multitask_experiment(name, scenario, tasks, data_dir="./store/datasets",
                     if not only_test:
                         print(" --> {}: 'train'-dataset consisting of {} samples".format(data_flag, len(train_datasets[-1])))
                     print(" --> {}: 'test'-dataset consisting of {} samples".format(data_flag, len(test_datasets[-1])))
+    elif 'HITSsrc' in name:
+            # HITS is defined as a domain-incremental benchmark with tasks based on sources or subjects
+            if scenario != 'domain':
+                raise ValueError("Experiment 'HITSsrc' only supports scenario='domain'.")
+            if tasks != len(HITSDataset.HITS_TASK_SRC):
+                raise ValueError(f"Experiment 'HITSsrc' requires exactly {len(HITSDataset.HITS_TASK_SRC)} tasks, one for each source group in HITS_TASK_SRC.")
+            # configurations
+            config = copy.deepcopy(DATASET_CONFIGS['hitssrc'])
+            classes_per_task = 3
+            if not only_config:
+    
+                dataset_transform = transforms.Compose([*AVAILABLE_TRANSFORMS['hitssrc']])
+    
+                train_datasets = []
+                test_datasets = []
+                train_all = HITSDataset(
+                    hdf5_path=data_dir + '/data_5k-srcCL-subsplit.hdf5',
+                    split='train',
+                    transform=dataset_transform
+                    )
+                test_all = HITSDataset(
+                    hdf5_path=data_dir + '/data_5k-srcCL-subsplit.hdf5',
+                    split='test',
+                    transform=dataset_transform
+                    )
+                for i_task, task_srcs in enumerate(HITSDataset.HITS_TASK_SRC):
+                    if not only_test:
+                        task_indices_train = []
+                        for src in task_srcs:
+                            task_indices_train.extend(train_all.get_indices_by_src(src))
+                        train_datasets.append(ReducedDataset(train_all, task_indices_train))
+                    test_indices_test = []
+                    for src in task_srcs:
+                        test_indices_test.extend(test_all.get_indices_by_src(src))
+                    test_datasets.append(ReducedDataset(test_all, test_indices_test))
+    
+                    if verbose:
+                        if not only_test:
+                            print(" --> {}: 'train'-dataset consisting of {} samples".format(task_srcs, len(train_datasets[-1])))
+                        print(" --> {}: 'test'-dataset consisting of {} samples".format(task_srcs, len(test_datasets[-1])))
     else:
         raise RuntimeError('Given undefined experiment: {}'.format(name))
 

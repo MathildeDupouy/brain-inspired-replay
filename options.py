@@ -1,5 +1,6 @@
 import argparse
 
+from data.HITS import HITSDataset
 from utils import checkattr
 
 ##-------------------------------------------------------------------------------------------------------------------##
@@ -51,6 +52,8 @@ def add_eval_options(parser, single_task=False, generative=False, compare_code="
     eval = parser.add_argument_group('Evaluation Parameters')
     eval.add_argument('--pdf', action='store_true', help="generate pdf with plots for individual experiment(s)")
     eval.add_argument('--visdom', action='store_true', help="use visdom for on-the-fly plots")
+    eval.add_argument('--methods', type=str, nargs='+', default=None, choices=['none', 'joint', 'generative', 'lwf', 'bir', 'ewc', 'si', 'xdg'],
+                        help='Specify the methods to run in comparison scripts. If None, run all methods. Options: none, joint, generative, lwf, bir, ewc, si, xdg.')
     if compare_code=="none" and not single_task:
         eval.add_argument('--log-per-task', action='store_true', help="set all visdom-logs to [iters]")
     if compare_code=="none":
@@ -73,14 +76,14 @@ def add_eval_options(parser, single_task=False, generative=False, compare_code="
 
 
 def add_task_options(parser, only_MNIST=False, single_task=False, compare_code="none", **kwargs):
-    # expirimental task parameters
+    # experimental task parameters
     task_params = parser.add_argument_group('Task Parameters')
     if single_task:
         task_choices = ['CIFAR10', 'CIFAR100', 'MNIST', 'MNIST28']
         task_default = 'CIFAR10'
     else:
         MNIST_tasks = ['splitMNIST', 'permMNIST']
-        image_tasks = ['CIFAR100', 'OrganMNIST']
+        image_tasks = ['CIFAR100', 'OrganMNIST', 'HITSsrc']
         task_choices = MNIST_tasks if only_MNIST else MNIST_tasks+image_tasks
         task_default = 'splitMNIST' if only_MNIST else 'CIFAR100'
     task_params.add_argument('--experiment', type=str, default=task_default, choices=task_choices)
@@ -104,6 +107,12 @@ def add_permutedMNIST_task_options(parser, **kwargs):
     # expirimental task parameters specific for the permuted MNIST protocol
     task_params = parser.add_argument_group('Task Parameters')
     task_params.add_argument('--tasks', type=int, help='number of permutations')
+    return parser
+
+def add_HITS_task_options(parser, **kwargs):
+    # experimental task parameters specific for the HITS protocol
+    task_params = parser.add_argument_group('Task Parameters')
+    task_params.add_argument('--task-order', type=int, nargs='+', help='order of tasks (list of integers)')
     return parser
 
 
@@ -287,7 +296,7 @@ def set_defaults(args, only_MNIST=False, single_task=False, generative=True, com
         args.depth = (5 if args.experiment in ('CIFAR10', 'CIFAR100') else 0) if args.depth is None else args.depth
     if hasattr(args, "recon_loss"):
         args.recon_loss = (
-            "MSE" if args.experiment in ('CIFAR10', 'CIFAR100') else "BCE"
+            "MSE" if args.experiment in ('CIFAR10', 'CIFAR100', 'HITSsrc') else "BCE"
         ) if args.recon_loss is None else args.recon_loss
     if hasattr(args, "dg_type"):
         args.dg_type = ("task" if args.experiment=='permMNIST' else "class") if args.dg_type is None else args.dg_type
@@ -297,6 +306,7 @@ def set_defaults(args, only_MNIST=False, single_task=False, generative=True, com
             'CIFAR100': 10,
             'OrganMNIST': 3,
             'permMNIST': 100,
+            'HITSsrc': len(HITSDataset.HITS_TASK_SRC),
         }
         args.tasks = default_tasks.get(args.experiment, 100) if args.tasks is None else args.tasks
 
@@ -305,6 +315,7 @@ def set_defaults(args, only_MNIST=False, single_task=False, generative=True, com
             'splitMNIST': 2000,
             'OrganMNIST': 2000,
             'permMNIST': 2000,
+            'HITSsrc': 1000,
         }
         args.iters = default_iters.get(args.experiment, 2000) if args.iters is None else args.iters
 
@@ -313,6 +324,7 @@ def set_defaults(args, only_MNIST=False, single_task=False, generative=True, com
             'OrganMNIST': 0.001,
             'CIFAR100': 0.0001,
             'permMNIST': 0.0001,
+            'HITSsrc': 0.001,
         }
         args.lr = default_lr.get(args.experiment, 0.0001) if args.lr is None else args.lr
 
@@ -321,6 +333,7 @@ def set_defaults(args, only_MNIST=False, single_task=False, generative=True, com
             'OrganMNIST': 128,
             'CIFAR100': 256,
             'permMNIST': 256,
+            'HITSsrc': 64,
         }
         args.batch = default_batch.get(args.experiment, 256) if args.batch is None else args.batch
 
@@ -329,6 +342,7 @@ def set_defaults(args, only_MNIST=False, single_task=False, generative=True, com
             'OrganMNIST': 400,
             'CIFAR100': 2000,
             'permMNIST': 2000,
+            'HITSsrc': 400,
         }
         args.fc_units = default_fc_units.get(args.experiment, 2000) if args.fc_units is None else args.fc_units
     # -set hyper-parameter values (typically found by grid-search) based on chosen experiment & scenario
@@ -362,6 +376,15 @@ def set_defaults(args, only_MNIST=False, single_task=False, generative=True, com
                 args.dg_si_prop = 0.8 if args.dg_si_prop is None else args.dg_si_prop
                 args.dg_c = 1. if args.dg_c is None else args.dg_c
         elif args.experiment=='OrganMNIST':
+            args.xdg_prop = 0. if args.scenario=="task" and args.xdg_prop is None else args.xdg_prop
+            args.si_c = (10. if args.scenario=='task' else 0.1) if args.si_c is None else args.si_c
+            args.ewc_lambda = (
+                1000000000. if args.scenario=='task' else 100000.
+            ) if args.ewc_lambda is None else args.ewc_lambda
+            args.gamma = 1. if args.gamma is None else args.gamma
+            if hasattr(args, 'dg_prop'):
+                args.dg_prop = 0.8 if args.dg_prop is None else args.dg_prop
+        elif args.experiment=='HITSsrc':
             args.xdg_prop = 0. if args.scenario=="task" and args.xdg_prop is None else args.xdg_prop
             args.si_c = (10. if args.scenario=='task' else 0.1) if args.si_c is None else args.si_c
             args.ewc_lambda = (

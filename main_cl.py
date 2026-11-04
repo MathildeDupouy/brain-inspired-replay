@@ -1,24 +1,27 @@
 #!/usr/bin/env python3
-import numpy as np
 import os
-from scipy.stats import entropy
+
+import numpy as np
 import torch
+from scipy.stats import entropy
 from torch import optim
-from torch.utils.data import ConcatDataset
 from torch.nn import functional as F
+from torch.utils.data import ConcatDataset
+
+import define_models as define
+import eval.fid as fid
+import eval.precision_recall as pr
 
 # -custom-written libraries
 import options
 import utils
-import define_models as define
+from data.HITS import HITSDataset
 from data.load import get_multitask_experiment
-from eval import evaluate
 from eval import callbacks as cb
-import eval.precision_recall as pr
-import eval.fid as fid
-from train import train_cl
-from param_stamp import get_param_stamp
+from eval import evaluate
 from models.cl.continual_learner import ContinualLearner
+from param_stamp import get_param_stamp
+from train import train_cl
 
 
 ## Function for specifying input-options and organizing / checking them
@@ -290,7 +293,6 @@ def run(args, verbose=False):
     #--------------------#
     #----- TRAINING -----#
     #--------------------#
-
     if args.train:
         if verbose:
             print("\nTraining...")
@@ -327,7 +329,8 @@ def run(args, verbose=False):
             not hasattr(args, 'full_ltag') or args.full_ltag == "none"
         ) else "{}-{}".format(model.name, args.full_ltag)
         utils.load_checkpoint(model, args.m_dir, name=load_name, verbose=verbose,
-                              add_si_buffers=(isinstance(model, ContinualLearner) and utils.checkattr(args, 'si')))
+                              add_si_buffers=(isinstance(model, ContinualLearner) and utils.checkattr(args, 'si')),
+                              add_ewc_buffers=(isinstance(model, ContinualLearner) and utils.checkattr(args, 'ewc')))
         if generator is not None:
             load_name = "gM-{}".format(param_stamp) if (
                 not hasattr(args, 'full_ltag') or args.full_ltag == "none"
@@ -500,7 +503,7 @@ def run(args, verbose=False):
         pp = evaluate.visual.plt.open_pdf(plot_name)
 
         # -show metrics reflecting progression during training
-        if args.train and (not utils.checkattr(args, 'only_last')):
+        if (args.train and (not utils.checkattr(args, 'only_last'))) or (not args.train and os.path.isfile("{}/dict-{}.pkl".format(args.r_dir, param_stamp))):
             # -create list to store all figures to be plotted.
             figure_list = []
             # -generate figures (and store them in [figure_list])

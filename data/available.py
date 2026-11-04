@@ -36,6 +36,12 @@ AVAILABLE_TRANSFORMS = {
     ],
     'cifar10_denorm': UnNormalize(mean=[0.4914, 0.4822, 0.4465], std=[0.2470, 0.2435, 0.2616]),
     'cifar100_denorm': UnNormalize(mean=[0.5071, 0.4865, 0.4409], std=[0.2673, 0.2564, 0.2761]),
+    'hitssrc': [
+            transforms.Resize((96, 224)),
+            transforms.RandomCrop(96, padding=2, padding_mode='symmetric'),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.5,0.5,0.5], std=[0.5,0.5,0.5]),
+    ],
     'augment_from_tensor': [
         transforms.ToPILImage(),
         transforms.RandomCrop(32, padding=4, padding_mode='symmetric'),
@@ -56,4 +62,5 @@ DATASET_CONFIGS = {
     'organmnist': {'size': 28, 'channels': 1, 'classes': 11},
     'cifar10': {'size': 32, 'channels': 3, 'classes': 10},
     'cifar100': {'size': 32, 'channels': 3, 'classes': 100},
+    'hitssrc': {'size': 96, 'channels': 3, 'classes': 7},
 }
