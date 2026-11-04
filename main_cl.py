@@ -33,6 +33,7 @@ def handle_inputs():
     parser = options.add_general_options(parser, **kwargs)
     parser = options.add_eval_options(parser, **kwargs)
     parser = options.add_task_options(parser, **kwargs)
+    parser = options.add_HITS_task_options(parser, **kwargs)
     parser = options.add_model_options(parser, **kwargs)
     parser = options.add_train_options(parser, **kwargs)
     parser = options.add_replay_options(parser, **kwargs)
@@ -80,6 +81,16 @@ def run(args, verbose=False):
     #----------------#
     #----- DATA -----#
     #----------------#
+
+    # For HITS experiments, allow user-specified task order from CLI.
+    if args.experiment in ('HITSsrc',) and args.task_order is not None:
+        if len(args.task_order) != args.tasks:
+            raise ValueError("Task order must have length equal to number of tasks.")
+        if set(args.task_order) != set(range(args.tasks)):
+            raise ValueError("Task order must contain all task indices from 0 to tasks-1.")
+        HITSDataset.set_task_order(args.task_order)
+        if verbose:
+            print("Using user-specified task order: {}".format(args.task_order))
 
     # Prepare data for chosen experiment
     if verbose:
@@ -336,6 +347,14 @@ def run(args, verbose=False):
                 not hasattr(args, 'full_ltag') or args.full_ltag == "none"
             ) else "{}-{}".format(generator.name, args.full_ltag)
             utils.load_checkpoint(generator, args.m_dir, name=load_name, verbose=verbose)
+            
+        # Load progress dict (if it exists) for plotting in pdf
+        file_name = "{}/dict-{}".format(args.r_dir, param_stamp)
+        if os.path.isfile(file_name + ".pkl"):
+            print("\nLoading progress-dict for plotting in pdf...")
+            progress_dict = utils.load_object(file_name)
+        else:
+            print(f"\nNo progress-dict {file_name + '.pkl'} found for plotting in pdf...")
 
 
     #-------------------------------------------------------------------------------------------------#
@@ -506,6 +525,7 @@ def run(args, verbose=False):
         if (args.train and (not utils.checkattr(args, 'only_last'))) or (not args.train and os.path.isfile("{}/dict-{}.pkl".format(args.r_dir, param_stamp))):
             # -create list to store all figures to be plotted.
             figure_list = []
+            task_line_colors = HITSDataset.get_task_colors() if args.experiment in ('HITSsrc', 'HITSsrcreversed') else None
             # -generate figures (and store them in [figure_list])
             figure = evaluate.visual.plt.plot_lines(
                 progress_dict["all_tasks"], x_axes=[
@@ -514,6 +534,7 @@ def run(args, verbose=False):
                 line_names=['{} {}'.format(
                     "episode / task" if args.scenario=="class" else "task", i+1
                 ) for i in range(args.tasks)],
+                colors=task_line_colors,
                 xlabel="# of {}s so far".format("classe" if args.scenario=="class" else "task"), ylabel="Test accuracy"
             )
             figure_list.append(figure)

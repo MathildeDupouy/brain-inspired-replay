@@ -124,11 +124,18 @@ def get_param_stamp(args, model_name, verbose=True, replay=False, replay_model_n
         recon_stamp = "--{}".format(args.recon_loss)
     else:
         recon_stamp = ""
+    
+    # -specific to datasets
+    dataset_stamp = ""
+    if args.task_order is not None and len(args.task_order)>0:
+        task_order_str = '-'.join(map(str, args.task_order))
+        dataset_stamp = f"-taskorder-{task_order_str}"
 
     # --> combine
-    param_stamp = "{}--{}--{}{}{}{}{}{}".format(
+    param_stamp = "{}--{}--{}{}{}{}{}{}{}".format(
         task_stamp, model_stamp, hyper_stamp, ewc_stamp, xdg_stamp, replay_stamp,
         recon_stamp, "-s{}".format(args.seed) if not args.seed==0 else "",
+        dataset_stamp
     )
 
     ## Print param-stamp on screen and return
