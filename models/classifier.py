@@ -1,11 +1,13 @@
 import numpy as np
 import torch
 from torch.nn import functional as F
-from models.utils import loss_functions as lf, modules
+
+from models.cl.continual_learner import ContinualLearner
 from models.conv.nets import ConvLayers
 from models.fc.layers import fc_layer
 from models.fc.nets import MLP
-from models.cl.continual_learner import ContinualLearner
+from models.utils import loss_functions as lf
+from models.utils import modules
 
 
 class Classifier(ContinualLearner):

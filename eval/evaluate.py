@@ -1,10 +1,10 @@
 import numpy as np
-from sklearn import manifold
 import torch
-import visual.visdom
-import visual.plt
-import utils
+from sklearn import manifold
 
+import utils
+import visual.plt
+import visual.visdom
 
 ####--------------------------------------------------------------------------------------------------------------####
 
@@ -157,7 +157,7 @@ def visualize_latent_space(model, X, y=None, visdom=None, pdf=None, verbose=Fals
         figure = visual.plt.plot_scatter(z_tsne[:, 0], z_tsne[:, 1], colors=y)
         pdf.savefig(figure)
     if visdom is not None:
-        message = ("Visualization of extracted representation")
+        message = (f"Visualization of extracted representation\n{len(z_tsne)} samples")
         visual.visdom.scatter_plot(z_tsne, title="{} ({})".format(message, visdom["graph"]),
                                    colors=y+1 if y is not None else y, env=visdom["env"])
 

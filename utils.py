@@ -1,9 +1,12 @@
 import os
 import pickle
+import re
+
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
+
 from models.fc import excitability_modules as em
 
 ##-------------------------------------------------------------------------------------------------------------------##
@@ -76,11 +79,12 @@ def save_checkpoint(model, model_dir, verbose=True, name=None):
         print(" --> saving model '{}' failed!!".format(name))
 
 
-def load_checkpoint(model, model_dir, verbose=True, name=None, add_si_buffers=False):
+def load_checkpoint(model, model_dir, verbose=True, name=None, add_si_buffers=False, add_ewc_buffers=False):
     '''Load saved state (in form of dictionary) at [model_dir] (if name is None, use "model.name") to [model].'''
     # -path from where to load checkpoint
     name = model.name if name is None else name
     path = os.path.join(model_dir, name)
+    assert os.path.isfile(path), " --> checkpoint of model '{}' not found at '{}'.".format(name, path)
     # -if required, add buffers to [model] to make sure its 'state_dict' matches the 'state_dict' of model to be loaded
     if add_si_buffers:
         for n, p in model.named_parameters():
@@ -90,8 +94,38 @@ def load_checkpoint(model, model_dir, verbose=True, name=None, add_si_buffers=Fa
                 omega = p.detach().clone().zero_()
                 model.register_buffer('{}_SI_prev_task'.format(n), p_current)
                 model.register_buffer('{}_SI_omega'.format(n), omega)
-    # load parameters (i.e., [model] will now have the state of the loaded model)
+    # load checkpoint first (needed below if EWC-buffers should be pre-registered)
     checkpoint = torch.load(path)
+
+    # -if required, add EWC-buffers that are present in checkpoint but not yet in [model]
+    if add_ewc_buffers:
+        state_to_load = checkpoint['state']
+        current_state_keys = set(model.state_dict().keys())
+        ewc_task_ids = set()
+        has_online_ewc_keys = False
+
+        for key, value in state_to_load.items():
+            is_ewc_key = ('_EWC_prev_task' in key) or ('_EWC_estimated_fisher' in key)
+            if not is_ewc_key:
+                continue
+
+            match = re.search(r'_EWC_(?:prev_task|estimated_fisher)(\d*)$', key)
+            if match:
+                if match.group(1) == "":
+                    has_online_ewc_keys = True
+                else:
+                    ewc_task_ids.add(int(match.group(1)))
+
+            if key not in current_state_keys and not hasattr(model, key):
+                model.register_buffer(key, value.detach().clone())
+
+        # Keep task-counter consistent with loaded buffers (important if EWC-loss is queried after loading).
+        if has_online_ewc_keys:
+            model.EWC_task_count = 1
+        elif len(ewc_task_ids) > 0:
+            model.EWC_task_count = max(ewc_task_ids)
+
+    # load parameters (i.e., [model] will now have the state of the loaded model)
     model.load_state_dict(checkpoint['state'])
     # notify that we succesfully loaded the checkpoint
     if verbose:

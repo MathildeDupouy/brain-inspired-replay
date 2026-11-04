@@ -1,15 +1,17 @@
 import math
+
 import numpy as np
 import torch
 from torch import nn
 from torch.nn import functional as F
-from models.utils import loss_functions as lf, modules
-from models.conv.nets import ConvLayers,DeconvLayers
-from models.fc.nets import MLP, MLP_gates
-from models.fc.layers import fc_layer,fc_layer_split, fc_layer_fixed_gates
-from models.cl.continual_learner import ContinualLearner
-from utils import get_data_loader
 
+from models.cl.continual_learner import ContinualLearner
+from models.conv.nets import ConvLayers, DeconvLayers
+from models.fc.layers import fc_layer, fc_layer_fixed_gates, fc_layer_split
+from models.fc.nets import MLP, MLP_gates
+from models.utils import loss_functions as lf
+from models.utils import modules
+from utils import get_data_loader
 
 
 class AutoEncoder(ContinualLearner):
