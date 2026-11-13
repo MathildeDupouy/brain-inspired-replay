@@ -81,8 +81,17 @@ def _latent_space_cb(log, datasets, visdom=None, pdf=None, sample_size=400, iter
 
         if iteration % log == 0:
             dataset = ConcatDataset(datasets[:task])
-            loader = utils.get_data_loader(dataset, batch_size=sample_size, cuda=model._is_on_cuda(), drop_last=True)
-            X,y = next(iter(loader))
+            n_samples = len(dataset)
+            if n_samples == 0:
+                return
+
+            actual_batch_size = min(sample_size, n_samples)
+            loader = utils.get_data_loader(dataset, batch_size=actual_batch_size, cuda=model._is_on_cuda(), drop_last=False)
+            try:
+                X, y = next(iter(loader))
+            except StopIteration:
+                return
+
             evaluate.visualize_latent_space(model, X.to(model._device()), y=y.to(model._device()), visdom=visdom,
                                             pdf=pdf)
 

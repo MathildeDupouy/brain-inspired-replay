@@ -17,12 +17,14 @@
           using a stratified 85/15 split (same as supervisor protocol).
 """
 
+import argparse
 import os
 import random
 import sys
 from collections import Counter
 
 import h5py
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torchvision.transforms as transforms
@@ -78,53 +80,78 @@ class HITSDataset(Dataset):
     #----- Class attributes and methods -----
     CLASSES     = ["A", "ES", "EG"]
     CLASS_TO_IDX = {c: i for i, c in enumerate(CLASSES)}
+    
     # Canonical HITS task definitions (used as stable reference for reordering)
-    BASE_HITS_TASK_SRC = [(6,), (5,), (9,), (1, 3, 11,), (2,), (4, 8,)] #, (7, 10,)]
-    HITS_TASK_SRC = list(BASE_HITS_TASK_SRC)
-    # Stable colors per task identity (keyed by source-group, independent of current order)
-    TASK_COLOR_BY_SRC = {
-        (6,): "tab:blue",
-        (5,): "tab:orange",
-        (9,): "tab:green",
-        (1, 3, 11): "tab:red",
-        (2,): "tab:purple",
-        (4, 8): "tab:brown",
+    BASE_HITS_TASK_SRC = {
+        'HITSsrc':{
+            'task_list': [(6,), (5,), (9,), (1, 3, 11,), (2,), (4, 8,)], #, (7, 10,)]
+            'color_dict': {
+                (6,): "tab:blue",
+                (5,): "tab:orange",
+                (9,): "tab:green",
+                (1, 3, 11): "tab:red",
+                (2,): "tab:purple",
+                (4, 8): "tab:brown",
+            },
+            'explication': '''
+            This is individual hospital sources, or grouping of similar hospitalsources, to maximize the number of tasks from 
+            the initial 51 patients, using same train and test than in MICCAI26-CLiMeM dataset.
+                6:                    15 sub, 4935 total, mainly A/GE, some FOP
+                5:                    11 sub, 1969 total, all 3 classes
+                9:                     1 sub,  609 total, mainly A/SE, stenosis only
+                TAVI group 1-3-11:     5 sub,  396 total, mainly A/GE, TAVI
+                    1:  3 sub, 291 total, GE only
+                    3:  1 sub,  94 total, mainly GE
+                    11: 1 sub,  11 total, A only
+                2:                     8 sub,  613 total, mainly A/SE
+                stenosis group 4-8:    7 sub,  413 total, mainly A/SE, stenosis
+                    4:  1 sub,  305 total, mainly A/SE, stenosis
+                    8:  6 sub,  108 total, mainly SE/A, stenosis only
+                remaining group 7-10:  2 sub,  139 total, mainly A/SE, stenosis only
+                    7:  1 sub,   15 total, GE only
+                    10: 1 sub,   40 total, mainly A/GE, AFA
+            '''
+        },
+        'HITSsrcAB':{
+            'task_list': [(5, 6, 9, 11), (1, 2, 3, 7, 8)],
+            'color_dict': {
+                (5, 6, 9, 11): "tab:blue",
+                (1, 2, 3, 7, 8): "tab:orange",
+            },
+            'explication': '''
+            This is a grouping of the HITS task sources into two main groups: A and B, same as in MICCAI26-CLiMeM work.
+            Group A includes sources 5, 6, 9, and 11.
+            Group B includes sources 1, 2, 3, 7, and 8.
+            4 and 10 were used as external test sets.
+            '''
+        },
+        'HITSsrcA-Bsplit':{
+            'task_list': [(5, 6, 9, 11), (1), (2), (3), (7), (8)],
+            'color_dict': {
+                (5, 6, 9, 11): "tab:blue",
+                (1): "tab:green",
+                (2): "tab:red",
+                (3): "tab:purple",
+                (7): "tab:brown",
+                (8): "tab:olive",
+            },
+            'explication': '''
+            This is a grouping of the HITS task sources into one big task A, and divided task B into smaller tasks.
+            Group A includes source 5.
+            Group B includes source 6.
+            Group C includes source 9.
+            Group D includes source 11.
+            Group E includes source 1.
+            Group F includes source 2.
+            '''
+        }
     }
-    # Explication
-    # 6:                    15 sub, 4935 total, mainly A/GE, some FOP
-    # 5:                    11 sub, 1969 total, all 3 classes
-    # 9:                     1 sub,  609 total, mainly A/SE, stenosis only
-    # TAVI group 1-3-11:     5 sub,  396 total, mainly A/GE, TAVI
-        # 1:  3 sub, 291 total, GE only
-        # 3:  1 sub,  94 total, mainly GE
-        # 11: 1 sub,  11 total, A only
-    # 2:                     8 sub,  613 total, mainly A/SE
-    # stenosis group 4-8:    7 sub,  413 total, mainly A/SE, stenosis
-        # 4:  1 sub,  305 total, mainly A/SE, stenosis
-        # 8:  6 sub,  108 total, mainly SE/A, stenosis only
-    # remaining group 7-10:  2 sub,  139 total, mainly A/SE, stenosis only
-        # 7:  1 sub,   15 total, GE only
-        # 10: 1 sub,   40 total, mainly A/GE, AFA
+    
     @classmethod
-    def set_task_order(cls, order):
-        """Set a new task order for the HITS benchmark."""
-        if len(order) != len(cls.BASE_HITS_TASK_SRC):
-            raise ValueError(f"Task order must have length {len(cls.BASE_HITS_TASK_SRC)}")
-        if set(order) != set(range(len(cls.BASE_HITS_TASK_SRC))):
-            raise ValueError(f"Task order must contain all task indices 0-{len(cls.BASE_HITS_TASK_SRC)-1}")
-        cls.HITS_TASK_SRC = [cls.BASE_HITS_TASK_SRC[i] for i in order]
-        print(f"New HITS task order set: {cls.HITS_TASK_SRC}")
-
-    @classmethod
-    def get_task_colors(cls):
+    def get_task_colors(cls, experiment_name):
         """Return plotting colors aligned with the current HITS task order."""
-        colors = []
-        for task_src in cls.HITS_TASK_SRC:
-            key = tuple(sorted(task_src))
-            if key not in cls.TASK_COLOR_BY_SRC:
-                raise KeyError(f"No color configured for HITS task source-group: {task_src}")
-            colors.append(cls.TASK_COLOR_BY_SRC[key])
-        return colors
+        color_dict = cls.BASE_HITS_TASK_SRC[experiment_name].get('color_dict', None)
+        return [color_dict[task] for task in cls.BASE_HITS_TASK_SRC[experiment_name].get('task_list', [])]
 
     #----- Instance attributes and methods -----
     def __init__(self, hdf5_path: str, split: str = "train",
@@ -207,35 +234,136 @@ class HITSDataset(Dataset):
         return [i for i, (_, sub) in enumerate(self.samples_metadata) if sub == sub_id]
 
 
-# =============================================================================
-# Stratified Val Split helper
-# =============================================================================
+def _count_labels(dataset, indices):
+    """Return class-count dict for selected indices of a HITSDataset."""
+    counts = Counter(dataset.samples[i][1] for i in indices)
+    return {HITSDataset.CLASSES[i]: counts.get(i, 0) for i in range(len(HITSDataset.CLASSES))}
 
-def _stratified_split(dataset: HITSDataset, val_pct: float = 0.15,
-                      seed: int = 42):
-    """
-    Carve out val_pct of each class from a HITSDataset to form a
-    stratified validation set. Returns (train_subset, val_subset).
 
-    Args:
-        dataset : HITSDataset (train split)
-        val_pct : fraction to use for validation (default 0.15)
-        seed    : random seed for reproducibility
-    """
-    rng = random.Random(seed)
+def _print_task_class_breakdown(split_name, dataset, task_groups):
+    """Print per-task class composition for the provided split."""
+    print(f"\n=== {split_name.upper()} TASK BREAKDOWN ===")
+    for task_id, src_group in enumerate(task_groups, start=1):
+        indices = []
+        for src in src_group:
+            indices.extend(dataset.get_indices_by_src(src))
 
-    class_indices = {}
-    for i, (_, lbl) in enumerate(dataset.samples):
-        class_indices.setdefault(lbl, []).append(i)
+        class_counts = _count_labels(dataset, indices)
+        total = sum(class_counts.values())
 
-    train_idx, val_idx = [], []
-    for lbl, idxs in class_indices.items():
-        shuffled = idxs.copy()
-        rng.shuffle(shuffled)
-        n_val = max(1, int(len(shuffled) * val_pct))
-        val_idx.extend(shuffled[:n_val])
-        train_idx.extend(shuffled[n_val:])
+        print(f"Task {task_id} | sources={src_group} | total={total}")
+        for class_name in HITSDataset.CLASSES:
+            count = class_counts[class_name]
+            pct = (100.0 * count / total) if total > 0 else 0.0
+            print(f"  {class_name}: {count} ({pct:.1f}%)")
 
-    return Subset(dataset, train_idx), Subset(dataset, val_idx)
 
-    
+def _plot_task_pie_charts(split_name, dataset, task_groups, out_dir):
+    """Plot and save one pie chart per task for class composition."""
+    n_tasks = len(task_groups)
+    n_cols = 3
+    n_rows = int(np.ceil(n_tasks / n_cols))
+
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(5 * n_cols, 5 * n_rows))
+    axes = np.atleast_1d(axes).reshape(-1)
+
+    class_colors = {
+        "A": "#4E79A7",
+        "ES": "#F28E2B",
+        "EG": "#59A14F",
+    }
+
+    for i, src_group in enumerate(task_groups):
+        indices = []
+        for src in src_group:
+            indices.extend(dataset.get_indices_by_src(src))
+
+        class_counts = _count_labels(dataset, indices)
+        labels = HITSDataset.CLASSES
+        values = [class_counts[label] for label in labels]
+        total = sum(values)
+
+        ax = axes[i]
+        if total == 0:
+            ax.text(0.5, 0.5, "No samples", ha="center", va="center", fontsize=12)
+            ax.set_title(f"Task {i+1} | src={src_group}")
+            ax.axis("off")
+            continue
+
+        pie_colors = [class_colors[label] for label in labels]
+        ax.pie(
+            values,
+            labels=labels,
+            colors=pie_colors,
+            autopct="%1.1f%%",
+            startangle=90,
+            counterclock=False,
+            wedgeprops={"linewidth": 1, "edgecolor": "white"},
+        )
+        ax.set_title(f"Task {i+1} | src={src_group} | n={total}")
+        ax.axis("equal")
+
+    for j in range(n_tasks, len(axes)):
+        axes[j].axis("off")
+
+    fig.suptitle(f"HITS {split_name.capitalize()} Class Distribution per Task", fontsize=16)
+    fig.tight_layout(rect=[0, 0.03, 1, 0.96])
+
+    os.makedirs(out_dir, exist_ok=True)
+    out_path = os.path.join(out_dir, f"hits_{split_name}_class_pies.png")
+    fig.savefig(out_path, dpi=200)
+    plt.close(fig)
+    print(f"Saved pie charts to: {out_path}")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description=(
+            "Inspect HITS source-group tasks and print class-wise details per task. "
+            "Task formation matches data/load.py:get_multitask_experiment for HITSsrc."
+        )
+    )
+    parser.add_argument(
+        "--hdf5",
+        default="./store/datasets/data_5k-srcCL-subsplit.hdf5",
+        help="Path to HITS HDF5 file (default: ./store/datasets/data_5k-srcCL-subsplit.hdf5)",
+    )
+    parser.add_argument(
+        "--base_tasks",
+        default="HITSsrc",
+        help="Base name of the HITS dataset (default: HITSsrc)",
+        choices=HITSDataset.BASE_HITS_TASK_SRC.keys()
+    )
+    parser.add_argument(
+        "--plot",
+        action="store_true",
+        help="If set, generate matplotlib pie charts per task for train and test splits.",
+    )
+    parser.add_argument(
+        "--plot-dir",
+        default="./store/plots",
+        help="Output directory for generated charts (default: ./store/plots)",
+    )
+    args = parser.parse_args()
+
+    if not os.path.exists(args.hdf5):
+        raise FileNotFoundError(
+            f"HDF5 file not found: {args.hdf5}. "
+            "Pass --hdf5 with the correct path to data_5k-srcCL-subsplit.hdf5"
+        )
+    assert args.base_tasks in HITSDataset.BASE_HITS_TASK_SRC.keys(), f"For HITS inspection, please precise base tasks (one of: {list(HITSDataset.BASE_HITS_TASK_SRC.keys())})"
+    task_groups = HITSDataset.BASE_HITS_TASK_SRC[args.base_tasks]['task_names']
+
+    print(f"Using HDF5: {args.hdf5}")
+    print(f"Task groups (HITS_TASK_SRC): {task_groups}")
+
+    train_set = HITSDataset(hdf5_path=args.hdf5, split="train", transform=None)
+    test_set = HITSDataset(hdf5_path=args.hdf5, split="test", transform=None)
+
+    _print_task_class_breakdown("train", train_set, task_groups)
+    _print_task_class_breakdown("test", test_set, task_groups)
+
+    if args.plot:
+        _plot_task_pie_charts("train", train_set, task_groups, args.plot_dir)
+        _plot_task_pie_charts("test", test_set, task_groups, args.plot_dir)
+

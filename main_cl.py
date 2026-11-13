@@ -83,12 +83,14 @@ def run(args, verbose=False):
     #----------------#
 
     # For HITS experiments, allow user-specified task order from CLI.
-    if args.experiment in ('HITSsrc',) and args.task_order is not None:
+    data_name = args.experiment
+    if 'HITSsrc' in args.experiment and args.task_order is not None:
         if len(args.task_order) != args.tasks:
-            raise ValueError("Task order must have length equal to number of tasks.")
+            raise ValueError("Task order must have length ({}) equal to number of tasks ({}).".format(len(args.task_order), args.tasks))
         if set(args.task_order) != set(range(args.tasks)):
-            raise ValueError("Task order must contain all task indices from 0 to tasks-1.")
-        HITSDataset.set_task_order(args.task_order)
+            raise ValueError("Task order must contain all task indices from 0 to {}-1.".format(args.tasks))
+        # Modify data name to include task order
+        data_name += "_task{}".format("-".join(map(str, args.task_order)))
         if verbose:
             print("Using user-specified task order: {}".format(args.task_order))
 
@@ -96,7 +98,7 @@ def run(args, verbose=False):
     if verbose:
         print("\nPreparing the data...")
     (train_datasets, test_datasets), config, classes_per_task = get_multitask_experiment(
-        name=args.experiment, scenario=args.scenario, tasks=args.tasks, data_dir=args.d_dir,
+        name=data_name, scenario=args.scenario, tasks=args.tasks, data_dir=args.d_dir,
         normalize=True if utils.checkattr(args, "normalize") else False,
         augment=True if utils.checkattr(args, "augment") else False,
         verbose=verbose, exception=True if args.seed<10 else False, only_test=(not args.train)
@@ -525,7 +527,9 @@ def run(args, verbose=False):
         if (args.train and (not utils.checkattr(args, 'only_last'))) or (not args.train and os.path.isfile("{}/dict-{}.pkl".format(args.r_dir, param_stamp))):
             # -create list to store all figures to be plotted.
             figure_list = []
-            task_line_colors = HITSDataset.get_task_colors() if args.experiment in ('HITSsrc', 'HITSsrcreversed') else None
+            task_line_colors = HITSDataset.get_task_colors(args.experiment.split('_')[0]) if 'HITSsrc' in args.experiment else None
+            if args.task_order is not None:
+                task_line_colors = [task_line_colors[i] for i in args.task_order]
             # -generate figures (and store them in [figure_list])
             figure = evaluate.visual.plt.plot_lines(
                 progress_dict["all_tasks"], x_axes=[

@@ -112,6 +112,7 @@ def add_permutedMNIST_task_options(parser, **kwargs):
 def add_HITS_task_options(parser, **kwargs):
     # experimental task parameters specific for the HITS protocol
     task_params = parser.add_argument_group('Task Parameters')
+    task_params.add_argument('--base_tasks', type=str, default='HITSsrc', help='Base name of the HITS dataset', choices=HITSDataset.BASE_HITS_TASK_SRC.keys())
     task_params.add_argument('--task-order', type=int, nargs='+', help='order of tasks (list of integers)')
     return parser
 
@@ -306,7 +307,7 @@ def set_defaults(args, only_MNIST=False, single_task=False, generative=True, com
             'CIFAR100': 10,
             'OrganMNIST': 3,
             'permMNIST': 100,
-            'HITSsrc': len(HITSDataset.HITS_TASK_SRC),
+            'HITSsrc': 6,
         }
         args.tasks = default_tasks.get(args.experiment, 100) if args.tasks is None else args.tasks
 

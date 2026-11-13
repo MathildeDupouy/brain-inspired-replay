@@ -97,7 +97,36 @@ def get_singletask_experiment(name, data_dir="./store/datasets", normalize=False
 
 def get_multitask_experiment(name, scenario, tasks, data_dir="./store/datasets", normalize=False, augment=False,
                              only_config=False, verbose=False, exception=False, only_test=False):
-    '''Load, organize and return train- and test-dataset for requested multi-task experiment.'''
+    '''Load, organize and return train- and test-dataset for requested multi-task experiment.
+    
+    Args
+    -------
+    name: str
+        Name of the experiment.
+    scenario: str
+        Scenario for the experiment.
+    tasks: int
+        Number of tasks.
+    data_dir: str
+        Directory where the data is stored.
+    normalize: bool
+        Whether to normalize the data.
+    augment: bool
+        Whether to augment the data.
+    only_config: bool
+        Whether to return only the configuration.
+    verbose: bool
+        Whether to print verbose output.
+    exception: bool
+        Whether to use exception handling.
+    only_test: bool
+        Whether to return only the test dataset.
+
+    Returns
+    -------
+    tuple
+        Tuple of train and test datasets, and the configuration dictionary.
+    '''
 
     ## NOTE: option 'normalize' and 'augment' only implemented for CIFAR-based experiments.
 
@@ -234,15 +263,26 @@ def get_multitask_experiment(name, scenario, tasks, data_dir="./store/datasets",
             # HITS is defined as a domain-incremental benchmark with tasks based on sources or subjects
             if scenario != 'domain':
                 raise ValueError("Experiment 'HITSsrc' only supports scenario='domain'.")
-            if tasks != len(HITSDataset.HITS_TASK_SRC):
-                raise ValueError(f"Experiment 'HITSsrc' requires exactly {len(HITSDataset.HITS_TASK_SRC)} tasks, one for each source group in HITS_TASK_SRC.")
+            
+            # Parse name to get HITS base dataset:
+            hits_base = name.split('_')[0]
+            assert hits_base in HITSDataset.BASE_HITS_TASK_SRC.keys(), f"Unknown HITS base dataset: {hits_base}, should be one of {list(HITSDataset.BASE_HITS_TASK_SRC.keys())}"
+            task_srcs = HITSDataset.BASE_HITS_TASK_SRC[hits_base].get('task_list', [])
+            tasks = len(task_srcs)
+            
+            # Parse name to get task order if specified, and reorder tasks
+            if "_task" in name:
+                task_order = tuple(map(int, name.split('_task')[1].split('-')))
+                assert len(task_order) == len(task_srcs), f"Task order length ({len(task_order)}) does not match task list length of base {hits_base}"
+                assert set(task_order) == set(range(len(task_srcs))), f"Task order is not a permutation of the task list indices"
+                task_srcs = [task_srcs[i] for i in task_order]
+
+     
             # configurations
             config = copy.deepcopy(DATASET_CONFIGS['hitssrc'])
             classes_per_task = 3
             if not only_config:
-    
                 dataset_transform = transforms.Compose([*AVAILABLE_TRANSFORMS['hitssrc']])
-    
                 train_datasets = []
                 test_datasets = []
                 train_all = HITSDataset(
@@ -255,21 +295,22 @@ def get_multitask_experiment(name, scenario, tasks, data_dir="./store/datasets",
                     split='test',
                     transform=dataset_transform
                     )
-                for i_task, task_srcs in enumerate(HITSDataset.HITS_TASK_SRC):
+
+                for sources in task_srcs:
                     if not only_test:
                         task_indices_train = []
-                        for src in task_srcs:
+                        for src in sources: # Loop on sources in a task
                             task_indices_train.extend(train_all.get_indices_by_src(src))
                         train_datasets.append(ReducedDataset(train_all, task_indices_train))
                     test_indices_test = []
-                    for src in task_srcs:
+                    for src in sources: # Loop on sources in a task
                         test_indices_test.extend(test_all.get_indices_by_src(src))
                     test_datasets.append(ReducedDataset(test_all, test_indices_test))
     
                     if verbose:
                         if not only_test:
-                            print(" --> {}: 'train'-dataset consisting of {} samples".format(task_srcs, len(train_datasets[-1])))
-                        print(" --> {}: 'test'-dataset consisting of {} samples".format(task_srcs, len(test_datasets[-1])))
+                            print(" --> {}: 'train'-dataset consisting of {} samples".format(sources, len(train_datasets[-1])))
+                        print(" --> {}: 'test'-dataset consisting of {} samples".format(sources, len(test_datasets[-1])))
     else:
         raise RuntimeError('Given undefined experiment: {}'.format(name))
 

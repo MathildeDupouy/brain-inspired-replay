@@ -33,10 +33,11 @@ def handle_inputs():
                         help='Regenerate individual pdfs even if they already exist.')
     # Parse and process (i.e., set defaults for unselected options) options
     args = parser.parse_args()
-    # HITSsrc benchmark is fixed: 7 domains under the Domain-IL scenario.
-    args.experiment = "HITSsrc"
+    # HITSsrc benchmark is fixed: Domain-IL scenario.
+    assert args.base_tasks in HITSDataset.BASE_HITS_TASK_SRC.keys(), f"For HITS comparison, please precise base tasks (one of: {list(HITSDataset.BASE_HITS_TASK_SRC.keys())})"
+    args.experiment = args.base_tasks
     args.scenario = "domain"
-    args.tasks = len(HITSDataset.HITS_TASK_SRC)
+    args.tasks = len(HITSDataset.BASE_HITS_TASK_SRC[args.base_tasks].get('task_list', []))
     options.set_defaults(args, **kwargs)
     return args
 
@@ -44,9 +45,7 @@ def handle_inputs():
 
 def get_results(args):
     # -get param-stamp
-    print("task order in args", args.task_order)
     param_stamp = get_param_stamp_from_args(args)
-    print("resulting stamp", param_stamp)
 
     # -check whether already run, and if not do so
     if os.path.isfile("{}/dict-{}.pkl".format(args.r_dir, param_stamp)):
@@ -99,14 +98,6 @@ if __name__ == '__main__':
     #--------------------------#
 
     seed_list = list(range(args.seed, args.seed+args.n_seeds))
-
-    # Modify task order if specified by user
-    if args.task_order is not None:
-        print(args.task_order, set(range(args.tasks)))
-        assert len(args.task_order)==args.tasks, "Task order must have length equal to number of tasks."
-        assert set(args.task_order)==set(range(args.tasks)), "Task order must contain all task indices."
-        HITSDataset.set_task_order(args.task_order)
-        print("Using user-specified task order: {}".format(args.task_order))
 
     # If user specified methods to run, filter the list of methods accordingly
     valid_methods = {"none", "joint", "generative", "lwf", "bir", "ewc", "si", "xdg"}
