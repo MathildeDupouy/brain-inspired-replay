@@ -1,8 +1,10 @@
+import copy
+
 import numpy as np
 import torch
-from torch.utils.data import ConcatDataset
 import tqdm
-import copy
+from torch.utils.data import ConcatDataset
+
 import utils
 from models.cl.continual_learner import ContinualLearner
 
@@ -154,18 +156,32 @@ def train_cl(model, train_datasets, replay_mode="none", scenario="task", rnt=Non
             # Update # iters left on current data-loader(s) and, if needed, create new one(s)
             if not Offline_TaskIL:
                 iters_left -= 1
-                if iters_left==0:
-                    data_loader = iter(utils.get_data_loader(train_dataset, batch_size, cuda=cuda, drop_last=True))
+                if iters_left <= 0:
+                    loader = utils.get_data_loader(train_dataset, batch_size, cuda=cuda, drop_last=True)
+                    if len(loader) == 0:
+                        print(f"[train_cl] Offline_TaskIL: Empty data loader for current task {task}.")
+                        # Some splits can be smaller than [batch_size] when drop_last=True, which makes
+                        # the loader legitimately empty. In that case there is no full training batch for
+                        # this task, so we skip the task rather than crashing with StopIteration.
+                        break
+                    data_loader = iter(loader)
                     iters_left = len(data_loader)
             else:
                 # -with "offline replay" in Task-IL scenario, there is a separate data-loader for each task
                 batch_size_to_use = int(np.ceil(batch_size/task))
                 for task_id in range(task):
                     iters_left[task_id] -= 1
-                    if iters_left[task_id]==0:
-                        data_loader[task_id] = iter(utils.get_data_loader(
+                    if iters_left[task_id] <= 0:
+                        loader = utils.get_data_loader(
                             train_datasets[task_id], batch_size_to_use, cuda=cuda, drop_last=True
-                        ))
+                        )
+                        if len(loader) == 0:
+                            print(f"[train_cl] no Offline_TaskIL: Empty data loader for current task {task}.")
+                            # Skip empty per-task split instead of letting next(...) raise StopIteration.
+                            data_loader[task_id] = iter(loader)
+                            iters_left[task_id] = 0
+                            continue
+                        data_loader[task_id] = iter(loader)
                         iters_left[task_id] = len(data_loader[task_id])
 
 
@@ -174,7 +190,11 @@ def train_cl(model, train_datasets, replay_mode="none", scenario="task", rnt=Non
 
             #####-----CURRENT BATCH-----#####
             if not Offline_TaskIL:
-                x, y = next(data_loader)                                    #--> sample training data of current task
+                try:
+                    x, y = next(data_loader)                                    #--> sample training data of current task
+                except StopIteration:
+                    print(f"[train_cl] No more data for current task {task}, breaking.")
+                    break
                 y = y-classes_per_task*(task-1) if scenario=="task" else y  #--> ITL: adjust y-targets to 'active range'
                 x, y = x.to(device), y.to(device)                           #--> transfer them to correct device
                 #y = y.expand(1) if len(y.size())==1 else y                 #--> hack for if batch-size is 1
@@ -182,13 +202,21 @@ def train_cl(model, train_datasets, replay_mode="none", scenario="task", rnt=Non
                 x = y = task_used = None  #--> all tasks are "treated as replay"
                 # -sample training data for all tasks so far, move to correct device and store in lists
                 x_, y_ = list(), list()
+                has_valid_batch = False
                 for task_id in range(task):
-                    x_temp, y_temp = next(data_loader[task_id])
+                    try:
+                        x_temp, y_temp = next(data_loader[task_id])
+                    except StopIteration:
+                        print(f"[train_cl] No more data for task {task_id}, skipping.")
+                        continue
+                    has_valid_batch = True
                     x_.append(x_temp.to(device))
                     y_temp = y_temp - (classes_per_task * task_id) #--> adjust y-targets to 'active range'
                     if batch_size_to_use == 1:
                         y_temp = torch.tensor([y_temp])            #--> correct dimensions if batch-size is 1
                     y_.append(y_temp.to(device))
+                if not has_valid_batch:
+                    break
 
 
             #####-----REPLAYED BATCH-----#####

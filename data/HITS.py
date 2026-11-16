@@ -150,6 +150,7 @@ class HITSDataset(Dataset):
     @classmethod
     def get_task_colors(cls, experiment_name):
         """Return plotting colors aligned with the current HITS task order."""
+        assert experiment_name in cls.BASE_HITS_TASK_SRC.keys(), f"Experiment name '{experiment_name}' not found in BASE_HITS_TASK_SRC"
         color_dict = cls.BASE_HITS_TASK_SRC[experiment_name].get('color_dict', None)
         return [color_dict[task] for task in cls.BASE_HITS_TASK_SRC[experiment_name].get('task_list', [])]
 
