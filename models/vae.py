@@ -54,8 +54,8 @@ class AutoEncoder(ContinualLearner):
         self.network_output = network_output
         # -settings for class- or task-specific gates in fully-connected hidden layers of decoder
         self.dg_type = dg_type
-        self.dg_prop = dg_prop
-        self.dg_gates = dg_gates if dg_prop>0. else False
+        self.dg_prop = 0. if dg_prop is None else dg_prop
+        self.dg_gates = dg_gates if self.dg_prop>0. else False
         self.gate_size = (tasks if dg_type=="task" else classes) if self.dg_gates else 0
         self.scenario = scenario
 

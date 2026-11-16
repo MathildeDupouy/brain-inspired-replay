@@ -29,8 +29,9 @@ def define_autoencoder(args, config, device, generator=False, convE=None):
             hidden=checkattr(args, 'hidden'),
             recon_loss=args.recon_loss, network_output="none" if checkattr(args, "normalize") else "sigmoid",
             deconv_type=args.deconv_type if hasattr(args, "deconv_type") else "standard",
-            dg_gates=utils.checkattr(args, 'dg_gates'), dg_type=args.dg_type if hasattr(args, 'dg_type') else "task",
-            dg_prop=args.dg_prop if hasattr(args, 'dg_prop') else 0.,
+            dg_gates=utils.checkattr(args, 'dg_gates'),
+            dg_type=args.dg_type if (hasattr(args, 'dg_type') and args.dg_type is not None) else "task",
+            dg_prop=args.dg_prop if (hasattr(args, 'dg_prop') and args.dg_prop is not None) else 0.,
             tasks=args.tasks if hasattr(args, 'tasks') else None,
             scenario=args.scenario if hasattr(args, 'scenario') else None, device=device,
             # -classifier
@@ -57,8 +58,9 @@ def define_autoencoder(args, config, device, generator=False, convE=None):
             # -decoder
             recon_loss=args.recon_loss, network_output="none" if checkattr(args, "normalize") else "sigmoid",
             deconv_type=args.deconv_type if hasattr(args, "deconv_type") else "standard",
-            dg_gates=utils.checkattr(args, 'dg_gates'), dg_type=args.dg_type if hasattr(args, 'dg_type') else "task",
-            dg_prop=args.dg_prop if hasattr(args, 'dg_prop') else 0.,
+            dg_gates=utils.checkattr(args, 'dg_gates'),
+            dg_type=args.dg_type if (hasattr(args, 'dg_type') and args.dg_type is not None) else "task",
+            dg_prop=args.dg_prop if (hasattr(args, 'dg_prop') and args.dg_prop is not None) else 0.,
             tasks=args.tasks if hasattr(args, 'tasks') else None,
             scenario=args.scenario if hasattr(args, 'scenario') else None, device=device,
             # -classifier
