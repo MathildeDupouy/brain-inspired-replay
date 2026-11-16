@@ -413,6 +413,15 @@ def set_defaults(args, only_MNIST=False, single_task=False, generative=True, com
             args.g_h_dim = args.g_fc_uni if args.g_h_dim is None else args.g_h_dim
     if (not single_task) and (not compare_code in ('hyper')):
         args.xdg_prop = 0. if args.scenario=="task" and args.xdg_prop is None else args.xdg_prop
+    # -normalize optional numeric args that are frequently compared against 0
+    if hasattr(args, 'ewc_lambda'):
+        args.ewc_lambda = 0. if args.ewc_lambda is None else args.ewc_lambda
+    if hasattr(args, 'si_c'):
+        args.si_c = 0. if args.si_c is None else args.si_c
+    if hasattr(args, 'xdg_prop'):
+        args.xdg_prop = 0. if args.xdg_prop is None else args.xdg_prop
+    if hasattr(args, 'dg_prop'):
+        args.dg_prop = 0. if args.dg_prop is None else args.dg_prop
     # -if [log_per_task] (which is default for comparison-scripts), reset all logs
     if not single_task:
         args.log_per_task = True if (not compare_code=="none") else args.log_per_task
