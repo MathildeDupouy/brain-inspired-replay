@@ -19,7 +19,6 @@
 
 import argparse
 import os
-import random
 import sys
 from collections import Counter
 
@@ -29,7 +28,7 @@ import numpy as np
 import torch
 import torchvision.transforms as transforms
 from PIL import Image
-from torch.utils.data import Dataset, Subset
+from torch.utils.data import Dataset
 
 # For internal imports
 sys.path.append(os.path.abspath(os.path.join("..")))
@@ -126,7 +125,7 @@ class HITSDataset(Dataset):
             '''
         },
         'HITSsrcA-Bsplit':{
-            'task_list': [(5, 6, 9, 11), (1), (2), (3), (7), (8)],
+            'task_list': [(5, 6, 9, 11), (1,), (2,), (3,), (7,), (8,)],
             'color_dict': {
                 (5, 6, 9, 11): "tab:blue",
                 (1): "tab:green",
