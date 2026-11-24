@@ -278,6 +278,8 @@ def add_allocation_options(parser, compare_code="none", **kwargs):
 ############################
 
 def set_defaults(args, only_MNIST=False, single_task=False, generative=True, compare_code='None', **kwargs):
+    # General default for HITS
+    args_experiment = 'HITSsrc' if 'HITSsrc' in args.experiment else args.experiment
     # -if 'brain-inspired' is selected, select corresponding defaults
     if checkattr(args, 'brain_inspired'):
         if hasattr(args, "replay") and not args.replay=="generative":
@@ -291,16 +293,17 @@ def set_defaults(args, only_MNIST=False, single_task=False, generative=True, com
         args.freeze_convE = True #--> internal replay
         args.distill = True      #--> distillation
     # -set default-values for certain arguments based on chosen experiment
-    args.normalize = args.normalize if args.experiment in ('CIFAR10', 'CIFAR100') else False
-    args.augment = args.augment if args.experiment in ('CIFAR10', 'CIFAR100') else False
+    args.normalize = args.normalize if args_experiment in ('CIFAR10', 'CIFAR100') else False
+    args.augment = args.augment if args_experiment in ('CIFAR10', 'CIFAR100') else False
     if hasattr(args, "depth"):
-        args.depth = (5 if args.experiment in ('CIFAR10', 'CIFAR100') else 0) if args.depth is None else args.depth
+        args.depth = (5 if args_experiment in ('CIFAR10', 'CIFAR100') else 0) if args.depth is None else args.depth
     if hasattr(args, "recon_loss"):
+        print("LOSS CHOSEN FOR EXPERIMENT", args_experiment)
         args.recon_loss = (
-            "MSE" if args.experiment in ('CIFAR10', 'CIFAR100', 'HITSsrc') else "BCE"
+            "MSE" if args_experiment in ('CIFAR10', 'CIFAR100', 'HITSsrc') else "BCE"
         ) if args.recon_loss is None else args.recon_loss
     if hasattr(args, "dg_type"):
-        args.dg_type = ("task" if args.experiment=='permMNIST' else "class") if args.dg_type is None else args.dg_type
+        args.dg_type = ("task" if args_experiment=='permMNIST' else "class") if args.dg_type is None else args.dg_type
     if not single_task:
         default_tasks = {
             'splitMNIST': 5,
@@ -309,7 +312,7 @@ def set_defaults(args, only_MNIST=False, single_task=False, generative=True, com
             'permMNIST': 100,
             'HITSsrc': 6,
         }
-        args.tasks = default_tasks.get(args.experiment, 100) if args.tasks is None else args.tasks
+        args.tasks = default_tasks.get(args_experiment, 100) if args.tasks is None else args.tasks
 
         default_iters = {
             'CIFAR100': 5000,
@@ -318,7 +321,7 @@ def set_defaults(args, only_MNIST=False, single_task=False, generative=True, com
             'permMNIST': 2000,
             'HITSsrc': 1000,
         }
-        args.iters = default_iters.get(args.experiment, 2000) if args.iters is None else args.iters
+        args.iters = default_iters.get(args_experiment, 2000) if args.iters is None else args.iters
 
         default_lr = {
             'splitMNIST': 0.001,
@@ -327,7 +330,7 @@ def set_defaults(args, only_MNIST=False, single_task=False, generative=True, com
             'permMNIST': 0.0001,
             'HITSsrc': 0.001,
         }
-        args.lr = default_lr.get(args.experiment, 0.0001) if args.lr is None else args.lr
+        args.lr = default_lr.get(args_experiment, 0.0001) if args.lr is None else args.lr
 
         default_batch = {
             'splitMNIST': 128,
@@ -336,7 +339,7 @@ def set_defaults(args, only_MNIST=False, single_task=False, generative=True, com
             'permMNIST': 256,
             'HITSsrc': 64,
         }
-        args.batch = default_batch.get(args.experiment, 256) if args.batch is None else args.batch
+        args.batch = default_batch.get(args_experiment, 256) if args.batch is None else args.batch
 
         default_fc_units = {
             'splitMNIST': 400,
@@ -345,10 +348,10 @@ def set_defaults(args, only_MNIST=False, single_task=False, generative=True, com
             'permMNIST': 2000,
             'HITSsrc': 400,
         }
-        args.fc_units = default_fc_units.get(args.experiment, 2000) if args.fc_units is None else args.fc_units
+        args.fc_units = default_fc_units.get(args_experiment, 2000) if args.fc_units is None else args.fc_units
     # -set hyper-parameter values (typically found by grid-search) based on chosen experiment & scenario
     if not single_task and not compare_code in ('hyper', 'bir'):
-        if args.experiment=='splitMNIST':
+        if args_experiment=='splitMNIST':
             args.xdg_prop = 0.9 if args.scenario=="task" and args.xdg_prop is None else args.xdg_prop
             args.si_c = (10. if args.scenario=='task' else 0.1) if args.si_c is None else args.si_c
             args.ewc_lambda = (
@@ -357,7 +360,7 @@ def set_defaults(args, only_MNIST=False, single_task=False, generative=True, com
             args.gamma = 1. if args.gamma is None else args.gamma
             if hasattr(args, 'dg_prop'):
                 args.dg_prop = 0.8 if args.dg_prop is None else args.dg_prop
-        elif args.experiment=='CIFAR100':
+        elif args_experiment=='CIFAR100':
             args.xdg_prop = 0.7 if args.scenario=="task" and args.xdg_prop is None else args.xdg_prop
             args.si_c = (100. if args.scenario=='task' else 1.) if args.si_c is None else args.si_c
             args.ewc_lambda = (1000. if args.scenario=='task' else 1.) if args.ewc_lambda is None else args.ewc_lambda
@@ -366,7 +369,7 @@ def set_defaults(args, only_MNIST=False, single_task=False, generative=True, com
             if compare_code=="all":
                 args.dg_si_prop = 0.6 if args.dg_si_prop is None else args.dg_si_prop
                 args.dg_c = 100000000. if args.dg_c is None else args.dg_c
-        elif args.experiment=='permMNIST':
+        elif args_experiment=='permMNIST':
             args.si_c = 10. if args.si_c is None else args.si_c
             args.ewc_lambda = 1. if args.ewc_lambda is None else args.ewc_lambda
             if hasattr(args, 'o_lambda'):
@@ -376,7 +379,7 @@ def set_defaults(args, only_MNIST=False, single_task=False, generative=True, com
             if compare_code=="all":
                 args.dg_si_prop = 0.8 if args.dg_si_prop is None else args.dg_si_prop
                 args.dg_c = 1. if args.dg_c is None else args.dg_c
-        elif args.experiment=='OrganMNIST':
+        elif args_experiment=='OrganMNIST':
             args.xdg_prop = 0. if args.scenario=="task" and args.xdg_prop is None else args.xdg_prop
             args.si_c = (10. if args.scenario=='task' else 0.1) if args.si_c is None else args.si_c
             args.ewc_lambda = (
@@ -385,7 +388,7 @@ def set_defaults(args, only_MNIST=False, single_task=False, generative=True, com
             args.gamma = 1. if args.gamma is None else args.gamma
             if hasattr(args, 'dg_prop'):
                 args.dg_prop = 0.8 if args.dg_prop is None else args.dg_prop
-        elif args.experiment=='HITSsrc':
+        elif args_experiment=='HITSsrc':
             args.xdg_prop = 0. if args.scenario=="task" and args.xdg_prop is None else args.xdg_prop
             args.si_c = (10. if args.scenario=='task' else 0.1) if args.si_c is None else args.si_c
             args.ewc_lambda = (

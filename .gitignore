@@ -4,6 +4,8 @@ store/results/
 store/models/mM*
 store/models/gM*
 
+pbs_scripts/
+
 .env
 __pycache__/
 .idea/

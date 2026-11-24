@@ -76,6 +76,7 @@ def collect_all(method_dict, seed_list, args, name=None):
     # -run method for all random seeds
     for seed in seed_list:
         args.seed = seed
+        print(f"\nRunning with seed {seed}...")
         method_dict[seed] = get_results(args)
     # -return updated dictionary with results
     return method_dict
