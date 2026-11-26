@@ -88,9 +88,9 @@ class HITSDataset(Dataset):
                 (6,): "tab:blue",
                 (5,): "tab:orange",
                 (9,): "tab:green",
-                (1, 3, 11): "tab:red",
+                (1, 3,): "tab:red",
                 (2,): "tab:purple",
-                (4, 8): "tab:brown",
+                (4, 8,): "tab:brown",
             },
             'explication': '''
             This is individual hospital sources, or grouping of similar hospitalsources, to maximize the number of tasks from 
@@ -112,10 +112,10 @@ class HITSDataset(Dataset):
             '''
         },
         'HITSsrcAB':{
-            'task_list': [(5, 6, 9,), (1, 2, 3, 7, 8)],
+            'task_list': [(5, 6, 9,), (1, 2, 3, 7, 8,)],
             'color_dict': {
-                (5, 6, 9, 11): "tab:blue",
-                (1, 2, 3, 7, 8): "tab:orange",
+                (5, 6, 9,): "tab:blue",
+                (1, 2, 3, 7, 8,): "tab:orange",
             },
             'explication': '''
             This is a grouping of the HITS task sources into two main groups: A and B, same as in MICCAI26-CLiMeM work.
@@ -127,7 +127,7 @@ class HITSDataset(Dataset):
         'HITSsrcA-Bsplit':{
             'task_list': [(5, 6, 9,), (1,), (2,), (3,), (7,), (8,)],
             'color_dict': {
-                (5, 6, 9, 11): "tab:blue",
+                (5, 6, 9,): "tab:blue",
                 (1,): "tab:green",
                 (2,): "tab:red",
                 (3,): "tab:purple",
