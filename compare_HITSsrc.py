@@ -11,6 +11,32 @@ from param_stamp import get_param_stamp_from_args
 from visual import plt
 
 
+def _compute_final_average_forgetting(progress_dict, n_tasks):
+    """Compute final average forgetting from stored per-task accuracy curves."""
+    if n_tasks <= 1:
+        return 0.
+    if ("all_tasks" not in progress_dict) or (len(progress_dict["all_tasks"]) < n_tasks):
+        return np.nan
+
+    best_per_task = []
+    final_per_task = []
+    for task_id in range(n_tasks):
+        history = progress_dict["all_tasks"][task_id]
+        if len(history) == 0:
+            best_per_task.append(np.nan)
+            final_per_task.append(np.nan)
+        else:
+            best_per_task.append(np.max(history))
+            final_per_task.append(history[-1])
+
+    forgetting = []
+    for task_id in range(n_tasks-1):
+        if np.isnan(best_per_task[task_id]) or np.isnan(final_per_task[task_id]):
+            continue
+        forgetting.append(best_per_task[task_id] - final_per_task[task_id])
+    return float(np.mean(forgetting)) if len(forgetting) > 0 else 0.
+
+
 ## Function for specifying input-options and organizing / checking them
 def handle_inputs():
     # Set indicator-dictionary for correctly retrieving / checking input options
@@ -65,8 +91,15 @@ def get_results(args):
     file.close()
     # -results-dict
     dict = utils.load_object("{}/dict-{}".format(args.r_dir,  param_stamp))
+    # -get average forgetting (use precomputed file if available, otherwise compute from progress-dict)
+    fileName_forgetting = '{}/forgetting-{}.txt'.format(args.r_dir, param_stamp)
+    if os.path.isfile(fileName_forgetting):
+        with open(fileName_forgetting) as file:
+            ave_forgetting = float(file.readline())
+    else:
+        ave_forgetting = _compute_final_average_forgetting(dict, args.tasks)
     # -return tuple with the results
-    return (dict, ave)
+    return (dict, ave, ave_forgetting)
 
 
 def collect_all(method_dict, seed_list, args, name=None):
@@ -213,24 +246,26 @@ if __name__ == '__main__':
     #----- COLLECT RESULTS -----#
     #---------------------------#
 
-    acc = {}
+    result_dict_all = {}
     ave_acc = {}
+    ave_forgetting = {}
 
     ## Create lists for all extracted <dicts> and <lists> with fixed order
     for seed in seed_list:
 
         i = 0
-        acc[seed] = {
-            method_name: results_dict[method_name][seed][i]["average"] for method_name in args.methods
+        result_dict_all[seed] = {
+            method_name: results_dict[method_name][seed][i] for method_name in args.methods
         }
         i = 1
         ave_acc[seed] = {
             method_name: results_dict[method_name][seed][i] for method_name in args.methods
         }
-        if args.scenario=="task":
-            acc[seed]["xdg"] = [results_dict["xdg"][seed][0]["average"]]
-            ave_acc[seed]["xdg"] = [results_dict["xdg"][seed][1]]
-
+        i = 2
+        ave_forgetting[seed] = {
+            method_name: results_dict[method_name][seed][i] for method_name in args.methods
+        }
+    # XdG logic removed because HITS are not task-IL but Domain-IL
 
     #-------------------------------------------------------------------------------------------------#
 
@@ -239,11 +274,10 @@ if __name__ == '__main__':
     #--------------------#
 
     # name for plot
-    plot_name = "summary-{}{}-{}-{}".format(args.experiment, args.tasks, args.scenario, '-'.join(map(str, args.task_order)))
+    plot_name = "summary-{}{}-{}-{}".format(args.experiment, args.tasks, args.scenario, '-'.join(map(str, args.task_order)) if args.task_order is not None else 'defaultOrder')
     scheme = "{}-incremental learning".format(args.scenario)
     title = "{}   -   {}".format(args.experiment, scheme)
-    ylabel_all = "Test accuracy ({})".format("based on all digits" if args.scenario=="class" else "after all tasks")
-    ylabel = "Test accucary ({} so far)".format("based on digits" if args.scenario=="class" else "on tasks")
+    ylabel = "Test accuracy ({} so far)".format("based on digits" if args.scenario=="class" else "on tasks")
     x_axes = results_dict[args.methods[0]][args.seed][0]["x_task"]
 
     # select names / colors / ids
@@ -257,45 +291,72 @@ if __name__ == '__main__':
     figure_list = []
 
     # bar-plot
-    means = [np.mean([ave_acc[seed][name] for seed in seed_list]) for name in methods_ordered]
+    means_acc = [np.mean([ave_acc[seed][name] for seed in seed_list]) for name in methods_ordered]
+    means_forgetting = [np.mean([ave_forgetting[seed][name] for seed in seed_list]) for name in methods_ordered]
     if args.n_seeds>1:
-        sems = [np.sqrt(np.var([ave_acc[seed][name] for seed in seed_list])/(len(seed_list)-1)) for name in methods_ordered]
-    figure = plt.plot_bar(means, 
-                          names=[names[name] for name in methods_ordered], 
-                          colors=[colors[name] for name in methods_ordered], 
-                          ylabel=ylabel_all,
+        sems_acc = [np.sqrt(np.var([ave_acc[seed][name] for seed in seed_list])/(len(seed_list)-1)) for name in methods_ordered]
+        sems_forgetting = [
+            np.sqrt(np.var([ave_forgetting[seed][name] for seed in seed_list])/(len(seed_list)-1))
+            for name in methods_ordered
+        ]
+
+    bar_names = [names[name] for name in methods_ordered]
+    bar_colors = [colors[name] for name in methods_ordered]
+    
+    figure_bar_acc = plt.plot_bar(means_acc,
+                          names=bar_names,
+                          colors=bar_colors,
+                          ylabel="Test accuracy (all test sets)",
                           title=title,
-                          yerr=sems if args.n_seeds>1 else None, 
+                          yerr=sems_acc if args.n_seeds>1 else None,
                           ylim=(0,1))
-    figure_list.append(figure)
+    figure_list.append(figure_bar_acc)
+    
+    figure_bar_acc = plt.plot_bar(means_forgetting,
+                          names=bar_names,
+                          colors=bar_colors,
+                          ylabel="Average forgetting (except last task)",
+                          title=title,
+                          yerr=sems_forgetting if args.n_seeds>1 else None,
+                          ylim=(0,1))
+    figure_list.append(figure_bar_acc)
 
     # print results to screen
     print("\n\n"+"#"*60+"\nSUMMARY RESULTS: {}\n".format(title)+"-"*60)
     for i, name in enumerate(methods_ordered):
         if len(seed_list) > 1:
-            print("{:19s} {:.2f}  (+/- {:.2f}),  n={}".format(name, 100*means[i], 100*sems[i], len(seed_list)))
+            print("{:19s} acc={:.2f} (+/- {:.2f}), forget={:.2f} (+/- {:.2f}), n={}".format(
+                name, 100*means_acc[i], 100*sems_acc[i], 100*means_forgetting[i], 100*sems_forgetting[i], len(seed_list)
+            ))
         else:
-            print("{:19s} {:.2f}".format(name, 100*means[i]))
+            print("{:19s} acc={:.2f}, forget={:.2f}".format(name, 100*means_acc[i], 100*means_forgetting[i]))
     print("#"*60)
 
     # line-plot
     ave_lines = []
     sem_lines = []
+    forgetting_lines = []
+    forgetting_sem_lines = []
     for name in methods_ordered:
-        new_ave_line = []
-        new_sem_line = []
-        for line_id in range(len(acc[args.seed][name])):
-            all_entries = [acc[seed][name][line_id] for seed in seed_list]
-            new_ave_line.append(np.mean(all_entries))
-            if args.n_seeds>1:
-                new_sem_line.append(np.sqrt(np.var(all_entries)/(len(all_entries)-1)))
-        ave_lines.append(new_ave_line)
-        sem_lines.append(new_sem_line)
+        all_entries_acc = [result_dict_all[seed][name]['average'] for seed in seed_list] # a line for each seed with n_tasks column for each task change
+        ave_lines.append(np.mean(all_entries_acc, axis=0)) # Mean on seed list
+        if args.n_seeds>1:
+            sem_lines.append(np.sqrt(np.var(all_entries_acc, axis=0)/(len(all_entries_acc)-1)))
+        
+        all_entries_forg = [result_dict_all[seed][name]["average_forgetting"] for seed in seed_list] # a line for each seed with n_tasks column for each task change
+        forgetting_lines.append(np.mean(all_entries_forg, axis=0))
+        if args.n_seeds>1:
+            forgetting_sem_lines.append(np.sqrt(np.var(all_entries_forg, axis=0)/(len(all_entries_forg)-1)))
     ylim = (0,1.02) if args.scenario=="class" else None
     figure = plt.plot_lines(ave_lines, x_axes=[2*i for i in x_axes] if args.scenario=="class" else x_axes,
                             line_names=[names[name] for name in methods_ordered], colors=[colors[name] for name in methods_ordered], title=title,
-                            xlabel="# {} so far".format("digits" if args.scenario=="class" else "tasks"), ylabel=ylabel,
+                            xlabel="# {} so far".format("digits" if args.scenario=="class" else "tasks"), ylabel="Average accuracy (on tasks so far)",
                             list_with_errors=sem_lines if args.n_seeds>1 else None, ylim=ylim)
+    figure_list.append(figure)
+    figure = plt.plot_lines(forgetting_lines, x_axes=[2*i for i in x_axes] if args.scenario=="class" else x_axes,
+                            line_names=[names[name] for name in methods_ordered], colors=[colors[name] for name in methods_ordered], title=title,
+                            xlabel="# {} so far".format("digits" if args.scenario=="class" else "tasks"), ylabel="Average forgetting (on tasks so far)",
+                            list_with_errors=forgetting_sem_lines if args.n_seeds>1 else None)
     figure_list.append(figure)
 
     # add figures to pdf

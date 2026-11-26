@@ -369,6 +369,7 @@ def run(args, verbose=False):
         print("\n\nEVALUATION RESULTS:")
 
     # Evaluate accuracy of final model on full test-set
+    print(len([test_datasets[i] for i in range(args.tasks)]))
     accs = [evaluate.validate(
         model, test_datasets[i], verbose=False, test_size=None, task=i+1,
         allowed_classes=list(range(classes_per_task*i, classes_per_task*(i+1))) if args.scenario=="task" else None
@@ -388,6 +389,19 @@ def run(args, verbose=False):
     output_file = open("{}/acc-{}.txt".format(args.r_dir, param_stamp), 'w')
     output_file.write('{}\n'.format(average_accs))
     output_file.close()
+
+    # Also save final average forgetting (mean over old tasks only), if available from progress tracking.
+    final_average_forgetting = None
+    if "all_tasks" in progress_dict and len(progress_dict["all_tasks"]) == args.tasks:
+        best_per_task = []
+        for task_id in range(args.tasks):
+            history = progress_dict["all_tasks"][task_id]
+            best_per_task.append(max(history) if len(history) > 0 else accs[task_id])
+        forgetting_per_task = [max(0., best_per_task[i] - accs[i]) for i in range(args.tasks)]
+        final_average_forgetting = (sum(forgetting_per_task[:-1]) / (args.tasks-1)) if args.tasks > 1 else 0.
+        output_file = open("{}/forgetting-{}.txt".format(args.r_dir, param_stamp), 'w')
+        output_file.write('{}\n'.format(final_average_forgetting))
+        output_file.close()
 
 
     #-------------------------------------------------------------------------------------------------#
@@ -530,11 +544,12 @@ def run(args, verbose=False):
             task_line_colors = HITSDataset.get_task_colors(args.experiment.split('_')[0]) if 'HITSsrc' in args.experiment else None
             if args.task_order is not None:
                 task_line_colors = [task_line_colors[i] for i in args.task_order]
+            x_axis = [
+                i*classes_per_task for i in progress_dict["x_task"]
+            ] if args.scenario=="class" else progress_dict["x_task"]
             # -generate figures (and store them in [figure_list])
             figure = evaluate.visual.plt.plot_lines(
-                progress_dict["all_tasks"], x_axes=[
-                    i*classes_per_task for i in progress_dict["x_task"]
-                ] if args.scenario=="class" else progress_dict["x_task"],
+                progress_dict["all_tasks"], x_axes=x_axis,
                 line_names=['{} {}'.format(
                     "episode / task" if args.scenario=="class" else "task", i+1
                 ) for i in range(args.tasks)],
@@ -542,16 +557,34 @@ def run(args, verbose=False):
                 xlabel="# of {}s so far".format("classe" if args.scenario=="class" else "task"), ylabel="Test accuracy"
             )
             figure_list.append(figure)
-            figure = evaluate.visual.plt.plot_lines(
-                [progress_dict["average"]], x_axes=[
-                    i*classes_per_task for i in progress_dict["x_task"]
-                ] if args.scenario=="class" else progress_dict["x_task"],
-                line_names=['Average based on all {}s so far'.format(
+
+            avg_lines = [progress_dict["average"]]
+            avg_names = ['Average based on all {}s so far'.format(
+                ("digit" if args.experiment=="splitMNIST" else "classe") if args.scenario else "task"
+            )]
+            if "average_forgetting" in progress_dict and len(progress_dict["average_forgetting"]) == len(x_axis):
+                avg_lines.append(progress_dict["average_forgetting"])
+                avg_names.append('Average forgetting (old {}s only)'.format(
                     ("digit" if args.experiment=="splitMNIST" else "classe") if args.scenario else "task"
-                )], xlabel="# of {}s so far".format("classe" if args.scenario=="class" else "task"),
-                ylabel="Test accuracy"
+                ))
+            figure = evaluate.visual.plt.plot_lines(
+                avg_lines, x_axes=x_axis, line_names=avg_names,
+                xlabel="# of {}s so far".format("classe" if args.scenario=="class" else "task"),
+                ylabel="Metric value"
             )
             figure_list.append(figure)
+
+            if "forgetting_all_tasks" in progress_dict:
+                figure = evaluate.visual.plt.plot_lines(
+                    progress_dict["forgetting_all_tasks"], x_axes=x_axis,
+                    line_names=['Forgetting {} {}'.format(
+                        "episode / task" if args.scenario=="class" else "task", i+1
+                    ) for i in range(args.tasks)],
+                    colors=task_line_colors,
+                    xlabel="# of {}s so far".format("classe" if args.scenario=="class" else "task"),
+                    ylabel="Forgetting"
+                )
+                figure_list.append(figure)
             # -add figures to pdf
             for figure in figure_list:
                 pp.savefig(figure)

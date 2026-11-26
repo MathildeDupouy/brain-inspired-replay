@@ -64,6 +64,9 @@ def initiate_progress_dict(n_tasks):
     progress_dict = {}
     progress_dict["all_tasks"] = [[] for _ in range(n_tasks)]
     progress_dict["average"] = []
+    progress_dict["best_all_tasks"] = [0. for _ in range(n_tasks)]
+    progress_dict["forgetting_all_tasks"] = [[] for _ in range(n_tasks)]
+    progress_dict["average_forgetting"] = []
     progress_dict["x_iteration"] = []
     progress_dict["x_task"] = []
     return progress_dict
@@ -74,13 +77,14 @@ def test_accuracy(model, datasets, current_task, iteration, classes_per_task=Non
     '''Evaluate accuracy of a classifier (=[model]) on all tasks so far (= up to [current_task]) using [datasets].
 
     [progress_dict]    None or <dict> of all measures to keep track of, to which results will be appended to
-    [classes_per_task]  <int> number of active classes er task
+    [classes_per_task]  <int> number of active classes per task
     [scenario]          <str> for how to decide which classes to include during evaluation
     [visdom]            None or <dict> with name of "graph" and "env" (if None, no visdom-plots are made)'''
 
     # Evaluate accuracy of model predictions for all tasks so far (reporting "0" for future tasks)
     n_tasks = len(datasets)
     accs = []
+    print(f"Current task = {current_task}, n_tasks = {n_tasks}")
     for i in range(n_tasks):
         if i+1 <= current_task:
             if scenario=='task':
@@ -89,6 +93,7 @@ def test_accuracy(model, datasets, current_task, iteration, classes_per_task=Non
                 allowed_classes = list(range(classes_per_task*(current_task)))
             else:
                 allowed_classes = None
+            print(f"[test accuracy] Evaluating task {i+1} size {len(datasets[i])} with allowed_classes={allowed_classes}")
             accs.append(validate(model, datasets[i], test_size=test_size, verbose=verbose,
                                   allowed_classes=allowed_classes, no_task_mask=no_task_mask, task=i+1))
         else:
@@ -96,6 +101,22 @@ def test_accuracy(model, datasets, current_task, iteration, classes_per_task=Non
     average_accs = sum(
         [accs[task_id] if task_id==0 else accs[task_id] for task_id in range(current_task)]
     ) / (current_task)
+
+    # Compute forgetting from running best accuracies on seen tasks so far.
+    forgetting_all = [0. for _ in range(n_tasks)]
+    average_forgetting = 0.
+    if progress_dict is not None:
+        if "best_all_tasks" not in progress_dict:
+            progress_dict["best_all_tasks"] = [0. for _ in range(n_tasks)]
+        if "forgetting_all_tasks" not in progress_dict:
+            progress_dict["forgetting_all_tasks"] = [[] for _ in range(n_tasks)]
+        if "average_forgetting" not in progress_dict:
+            progress_dict["average_forgetting"] = []
+        for task_id in range(current_task):
+            progress_dict["best_all_tasks"][task_id] = max(progress_dict["best_all_tasks"][task_id], accs[task_id])
+            forgetting_all[task_id] = progress_dict["best_all_tasks"][task_id] - accs[task_id]
+        if current_task > 1:
+            average_forgetting = sum(forgetting_all[:current_task-1]) / (current_task-1)
 
     # Print results on screen
     if verbose:
@@ -113,12 +134,18 @@ def test_accuracy(model, datasets, current_task, iteration, classes_per_task=Non
                 scalars=[average_accs], names=["ave accuracy"], iteration=iteration,
                 title="Average accuracy ({})".format(visdom["graph"]), env=visdom["env"], ylabel="accuracy"
             )
+            visual.visdom.visualize_scalars(
+                scalars=[average_forgetting], names=["ave forgetting"], iteration=iteration,
+                title="Average forgetting ({})".format(visdom["graph"]), env=visdom["env"], ylabel="forgetting"
+            )
 
     # Append results to [progress]-dictionary and return
     if progress_dict is not None:
         for task_id, _ in enumerate(names):
             progress_dict["all_tasks"][task_id].append(accs[task_id])
+            progress_dict["forgetting_all_tasks"][task_id].append(forgetting_all[task_id])
         progress_dict["average"].append(average_accs)
+        progress_dict["average_forgetting"].append(average_forgetting)
         progress_dict["x_iteration"].append(iteration)
         progress_dict["x_task"].append(current_task)
     return progress_dict
